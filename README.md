@@ -167,7 +167,6 @@ secrets and variables; a platform without them is skipped:
 | --- | --- | --- | --- |
 | Modrinth | `MODRINTH_TOKEN` | `MODRINTH_PROJECT_ID` | every jar |
 | CurseForge | `CURSEFORGE_TOKEN` | `CURSEFORGE_PROJECT_ID` | mod jars except Ornithe |
-| dev.bukkit.org | `BUKKITDEV_TOKEN` | `BUKKITDEV_PROJECT_ID` | the plugin |
 | Hangar | `HANGAR_API_KEY` | `HANGAR_PROJECT` | the plugin |
 
 SpigotMC has no upload API, so post the plugin there by hand.

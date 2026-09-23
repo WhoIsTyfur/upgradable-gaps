@@ -10,9 +10,10 @@
 Each platform runs only when its variables are set:
   Modrinth         MODRINTH_TOKEN, MODRINTH_PROJECT_ID     every jar
   CurseForge       CURSEFORGE_TOKEN, CURSEFORGE_PROJECT_ID mod jars
-  dev.bukkit.org   BUKKITDEV_TOKEN, BUKKITDEV_PROJECT_ID   the plugin
   Hangar           HANGAR_API_KEY, HANGAR_PROJECT          the plugin
-SpigotMC has no upload API; post the plugin there by hand.
+The plugin goes to SpigotMC and to CurseForge's Bukkit Plugins by hand: SpigotMC
+has no upload API, and CurseForge's plugin API (dev.bukkit.org) only takes a
+Twitch login.
 """
 
 from __future__ import annotations
@@ -33,7 +34,6 @@ DIST = ROOT / "dist"
 USER_AGENT = "TinyGecko920/upgradable-gaps publish.py"
 MODRINTH_API = "https://api.modrinth.com/v2"
 CURSEFORGE_API = "https://minecraft.curseforge.com/api"
-BUKKITDEV_API = "https://dev.bukkit.org/api"
 HANGAR_API = "https://hangar.papermc.io/api/v1"
 
 
@@ -102,26 +102,28 @@ def modrinth(entry: dict, changelog: str, dry_run: bool) -> None:
     print("  modrinth: version", result["id"])
 
 
-class CurseVersions:
-    """Game version ids for one CurseForge site, looked up by name."""
-
-    def __init__(self, api: str, token: str, type_prefixes: tuple[str, ...]):
-        headers = {"X-Api-Token": token}
-        types = request(f"{api}/game/version-types", headers)
-        wanted = {t["id"] for t in types if t["slug"].startswith(type_prefixes)}
-        self.ids = {v["name"]: v["id"] for v in request(f"{api}/game/versions", headers) if v["gameVersionTypeID"] in wanted}
-
-    def lookup(self, names: list[str]) -> list[int]:
-        missing = [n for n in names if n not in self.ids]
-        if missing:
-            raise RuntimeError(f"no CurseForge game version for: {', '.join(missing)}")
-        return [self.ids[n] for n in names]
+_curseforge_versions: dict[str, int] | None = None
 
 
-_curse_sites: dict[str, CurseVersions] = {}
+def curseforge_version_ids(names: list[str]) -> list[int]:
+    global _curseforge_versions
+    if _curseforge_versions is None:
+        headers = {"X-Api-Token": os.environ["CURSEFORGE_TOKEN"]}
+        types = request(f"{CURSEFORGE_API}/game/version-types", headers)
+        # Mod loaders are game versions of their own type on CurseForge.
+        wanted = {t["id"] for t in types if t["slug"].startswith(("minecraft-", "modloader"))}
+        versions = request(f"{CURSEFORGE_API}/game/versions", headers)
+        _curseforge_versions = {v["name"]: v["id"] for v in versions if v["gameVersionTypeID"] in wanted}
+    missing = [n for n in names if n not in _curseforge_versions]
+    if missing:
+        raise RuntimeError(f"CurseForge has no game version for: {', '.join(missing)}")
+    return [_curseforge_versions[n] for n in names]
 
 
-def curse_upload(site: str, api: str, token_var: str, project_var: str, entry: dict, names: list[str], changelog: str, dry_run: bool) -> None:
+def curseforge(entry: dict, changelog: str, dry_run: bool) -> None:
+    if entry.get("plugin") or not entry["curseforge_loaders"]:
+        return
+    names = entry["game_versions"] + entry["curseforge_loaders"]
     metadata = {
         "changelog": changelog,
         "changelogType": "markdown",
@@ -129,28 +131,15 @@ def curse_upload(site: str, api: str, token_var: str, project_var: str, entry: d
         "releaseType": "release",
     }
     if dry_run:
-        print(f"  {site}:", json.dumps({**metadata, "gameVersions": names}))
+        print("  curseforge:", json.dumps({**metadata, "gameVersions": names}))
         return
-    if site not in _curse_sites:
-        # Mod loaders are game versions of their own type on CurseForge.
-        _curse_sites[site] = CurseVersions(api, os.environ[token_var], ("minecraft-", "modloader", "bukkit"))
-    metadata["gameVersions"] = _curse_sites[site].lookup(names)
+    metadata["gameVersions"] = curseforge_version_ids(names)
     body, content_type = multipart({"metadata": json.dumps(metadata)}, {"file": DIST / entry["file"]})
-    project = os.environ[project_var]
-    result = request(f"{api}/projects/{project}/upload-file", {"X-Api-Token": os.environ[token_var]}, body, content_type)
-    print(f"  {site}: file", result["id"])
-
-
-def curseforge(entry: dict, changelog: str, dry_run: bool) -> None:
-    if entry.get("plugin") or not entry["curseforge_loaders"]:
-        return
-    names = entry["game_versions"] + entry["curseforge_loaders"]
-    curse_upload("curseforge", CURSEFORGE_API, "CURSEFORGE_TOKEN", "CURSEFORGE_PROJECT_ID", entry, names, changelog, dry_run)
-
-
-def bukkitdev(entry: dict, changelog: str, dry_run: bool) -> None:
-    if entry.get("plugin"):
-        curse_upload("bukkitdev", BUKKITDEV_API, "BUKKITDEV_TOKEN", "BUKKITDEV_PROJECT_ID", entry, entry["game_versions"], changelog, dry_run)
+    project = os.environ["CURSEFORGE_PROJECT_ID"]
+    result = request(
+        f"{CURSEFORGE_API}/projects/{project}/upload-file", {"X-Api-Token": os.environ["CURSEFORGE_TOKEN"]}, body, content_type
+    )
+    print("  curseforge: file", result["id"])
 
 
 _hangar_jwt: str | None = None
@@ -184,7 +173,6 @@ def hangar(entry: dict, changelog: str, dry_run: bool) -> None:
 PLATFORMS = {
     modrinth: ("MODRINTH_TOKEN", "MODRINTH_PROJECT_ID"),
     curseforge: ("CURSEFORGE_TOKEN", "CURSEFORGE_PROJECT_ID"),
-    bukkitdev: ("BUKKITDEV_TOKEN", "BUKKITDEV_PROJECT_ID"),
     hangar: ("HANGAR_API_KEY", "HANGAR_PROJECT"),
 }
 

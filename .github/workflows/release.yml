@@ -25,8 +25,6 @@ jobs:
           MODRINTH_PROJECT_ID: ${{ vars.MODRINTH_PROJECT_ID }}
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
           CURSEFORGE_PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
-          BUKKITDEV_TOKEN: ${{ secrets.BUKKITDEV_TOKEN }}
-          BUKKITDEV_PROJECT_ID: ${{ vars.BUKKITDEV_PROJECT_ID }}
           HANGAR_API_KEY: ${{ secrets.HANGAR_API_KEY }}
           HANGAR_PROJECT: ${{ vars.HANGAR_PROJECT }}
         run: python3 publish.py

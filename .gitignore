@@ -18,3 +18,4 @@ bin/
 .kotlin/
 node_modules/
 __pycache__/
+dist/

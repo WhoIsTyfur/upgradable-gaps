@@ -29,9 +29,9 @@ public final class SelfTest {
     private static final int CENTER = 5;
 
     @Mod.EventHandler
-    public void started(FMLServerStartedEvent event) {
+    public void started(FMLServerStartedEvent event) throws ReflectiveOperationException {
         WorldServer world = MinecraftServer.getServer().worldServerForDimension(0);
-        EntityPlayer player = FakePlayerFactory.get(world, new GameProfile(UUID.randomUUID(), "selftest"));
+        EntityPlayer player = FakePlayerFactory.get(world, profile());
         StringBuilder failures = new StringBuilder();
 
         ContainerWorkbench menu = fill(player, 8, 1, Items.golden_apple);
@@ -55,6 +55,15 @@ public final class SelfTest {
         expect(failures, "vanilla golden apple", vanilla != null && vanilla.getItem() == Items.golden_apple && vanilla.getMetadata() == 0);
 
         FMLLog.info("UPGRADABLEGAPS-SELFTEST %s", failures.length() == 0 ? "PASS" : "FAIL:" + failures);
+    }
+
+    // The authlib in Forge 1.7.2 takes a String id, 1.7.10's a UUID.
+    private static GameProfile profile() throws ReflectiveOperationException {
+        try {
+            return GameProfile.class.getConstructor(UUID.class, String.class).newInstance(UUID.randomUUID(), "selftest");
+        } catch (NoSuchMethodException e) {
+            return GameProfile.class.getConstructor(String.class, String.class).newInstance(UUID.randomUUID().toString(), "selftest");
+        }
     }
 
     private static ContainerWorkbench fill(EntityPlayer player, int ingots, int centerCount, Item center) {

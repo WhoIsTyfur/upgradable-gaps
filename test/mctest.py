@@ -188,6 +188,8 @@ def java_executable(major: int, release: str | None = None) -> pathlib.Path:
         found = sorted(home.glob(f"*/bin/{exe_name}"))
         if found:
             return found[0]
+        if major == 7:
+            raise RuntimeError(f"no Java 7 JDK: Adoptium has none, so extract Azul's Zulu 7 zip into {home}")
         os_name = {"Windows": "windows", "Linux": "linux", "Darwin": "mac"}[platform.system()]
         if release:
             info = json.loads(http_get(ADOPTIUM_RELEASE.format(release=release, os=os_name)))
@@ -386,6 +388,9 @@ def forge(mc: str, version: str) -> Server:
         seed = {f"minecraft_server.{mc}.jar": vanilla_jar(mc)}
     server = _from_install(_installed("forge", mc, version, url, seed), mc)
     server.java_release = FORGE_JDK.get(mc)
+    if mc == "1.7.2":
+        # Its launchwrapper throws a ConcurrentModificationException on Java 8u20+.
+        server.java_major = 7
     return server
 
 

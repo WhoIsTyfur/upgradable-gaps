@@ -32,6 +32,9 @@ subprojects {
     group = 'org.tyfur.upgradablegaps'
     base.archivesName = 'upgradable-gaps'
 
+    // Forge's maven first: Unimined's mirror has POMs for old MCPConfig builds but
+    // not their zips, and Gradle stops at the first repo with the POM.
+    unimined.minecraftForgeMaven()
     repositories {
         maven { url = 'https://maven.wagyourtail.xyz/releases' }
         mavenCentral()
@@ -87,14 +90,21 @@ subprojects {
 
     sourceSets.main {
         java.srcDirs = ["${rootDir}/src/${property('era')}/java"]
-        resources.srcDirs = ["${rootDir}/src/shared/resources"]
+        // Forge 1.12.2 and older read mcmod.info; 1.13+ reads mods.toml.
+        resources.srcDirs = ["${rootDir}/src/${findProperty('metadata') ?: 'mcmod'}/resources", "${rootDir}/src/${property('era')}/resources"]
     }
 
     processResources {
-        inputs.property 'version', version
-        inputs.property 'mc', mc
-        filesMatching(['mcmod.info', 'version.properties']) {
-            expand version: version, mc: mc
+        def values = [
+                version: version,
+                mc: mc,
+                loader_range: findProperty('loader_range') ?: '',
+                minecraft_range: findProperty('minecraft_range') ?: '',
+                pack_format: findProperty('pack_format') ?: '',
+        ]
+        inputs.properties values
+        filesMatching(['mcmod.info', 'version.properties', 'META-INF/mods.toml', 'pack.mcmeta']) {
+            expand values
         }
     }
 

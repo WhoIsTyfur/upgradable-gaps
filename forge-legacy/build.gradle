@@ -42,6 +42,22 @@ subprojects {
         toolchain.languageVersion = JavaLanguageVersion.of(javaRelease < 8 ? 17 : 21)
     }
 
+    // Test-only mod for versions whose servers turn vanilla clients (the test bot) away.
+    def selftestSource = file("${rootDir}/src/${property('era')}-selftest/java")
+    def remapTasks = ['remapJar']
+    def selftestJar = null
+    if (selftestSource.exists()) {
+        sourceSets.create('selftest') {
+            java.srcDirs = [selftestSource]
+        }
+        selftestJar = tasks.register('selftestJar', Jar) {
+            from sourceSets.selftest.output
+            archiveClassifier = 'selftest-dev'
+            destinationDirectory = layout.buildDirectory.dir('selftest')
+        }
+        remapTasks << 'remapSelftestJar'
+    }
+
     unimined.minecraft {
         version mc
         mappings {
@@ -56,6 +72,17 @@ subprojects {
         minecraftForge {
             loader property('forge_version') as String
         }
+        if (selftestJar != null) {
+            remap(selftestJar.get()) {
+                archiveClassifier = 'selftest'
+                destinationDirectory = layout.buildDirectory.dir('selftest')
+            }
+        }
+    }
+
+    if (selftestJar != null) {
+        sourceSets.selftest.compileClasspath += sourceSets.main.compileClasspath
+        tasks.named('build') { dependsOn 'remapSelftestJar' }
     }
 
     sourceSets.main {
@@ -86,37 +113,39 @@ subprojects {
                 dependencies.create("net.minecraftforge:forge:${mc}-${property('forge_version')}:src@zip"))
         // Forge 1.6 loads game classes by packaged names, but Unimined's searge
         // names for it still sit in net/minecraft/src.
-        tasks.named('remapJar') {
-            doLast {
-                def packages = [:]
-                zipTree(forgeSrc.singleFile).matching { include '**/fml/conf/packages.csv' }.singleFile.eachLine { line ->
-                    def (cls, pkg) = line.split(',')
-                    if (cls != 'class') {
-                        packages["net/minecraft/src/${cls}".toString()] = "${pkg}/${cls}".toString()
-                    }
-                }
-                def remapper = new SimpleRemapper(packages)
-                def jarFile = archiveFile.get().asFile
-                def tmp = new File("${jarFile}.tmp")
-                new ZipFile(jarFile).withCloseable { zip ->
-                    new ZipOutputStream(new FileOutputStream(tmp)).withCloseable { out ->
-                        zip.entries().each { entry ->
-                            byte[] bytes = zip.getInputStream(entry).bytes
-                            if (entry.name.endsWith('.class')) {
-                                def writer = new ClassWriter(0)
-                                new ClassReader(bytes).accept(new ClassRemapper(writer, remapper), 0)
-                                bytes = writer.toByteArray()
-                            }
-                            def copy = new ZipEntry(entry.name)
-                            copy.time = entry.time
-                            out.putNextEntry(copy)
-                            out.write(bytes)
-                            out.closeEntry()
+        remapTasks.each { name ->
+            tasks.named(name) {
+                doLast {
+                    def packages = [:]
+                    zipTree(forgeSrc.singleFile).matching { include '**/fml/conf/packages.csv' }.singleFile.eachLine { line ->
+                        def (cls, pkg) = line.split(',')
+                        if (cls != 'class') {
+                            packages["net/minecraft/src/${cls}".toString()] = "${pkg}/${cls}".toString()
                         }
                     }
+                    def remapper = new SimpleRemapper(packages)
+                    def jarFile = archiveFile.get().asFile
+                    def tmp = new File("${jarFile}.tmp")
+                    new ZipFile(jarFile).withCloseable { zip ->
+                        new ZipOutputStream(new FileOutputStream(tmp)).withCloseable { out ->
+                            zip.entries().each { entry ->
+                                byte[] bytes = zip.getInputStream(entry).bytes
+                                if (entry.name.endsWith('.class')) {
+                                    def writer = new ClassWriter(0)
+                                    new ClassReader(bytes).accept(new ClassRemapper(writer, remapper), 0)
+                                    bytes = writer.toByteArray()
+                                }
+                                def copy = new ZipEntry(entry.name)
+                                copy.time = entry.time
+                                out.putNextEntry(copy)
+                                out.write(bytes)
+                                out.closeEntry()
+                            }
+                        }
+                    }
+                    jarFile.delete()
+                    tmp.renameTo(jarFile)
                 }
-                jarFile.delete()
-                tmp.renameTo(jarFile)
             }
         }
     }

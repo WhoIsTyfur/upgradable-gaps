@@ -187,6 +187,13 @@ def cached_json(url: str):
         return _json_cache[url]
 
 
+def cached_text(url: str) -> str:
+    with lock_for("text:" + url):
+        if url not in _json_cache:
+            _json_cache[url] = http_get(url).decode("utf-8")
+        return _json_cache[url]
+
+
 def version_json(version: str) -> dict:
     manifest = cached_json(VERSION_MANIFEST)
     entry = next((v for v in manifest["versions"] if v["id"] == version), None)
@@ -278,7 +285,7 @@ def neoforge_version(mc: str) -> str | None:
     return (stable or versions or [None])[-1]
 
 
-def _installed(kind: str, mc: str, version: str, url: str) -> pathlib.Path:
+def _installed(kind: str, mc: str, version: str, url: str, seed: dict[str, pathlib.Path] | None = None) -> pathlib.Path:
     root = CACHE / "installs" / f"{kind}-{mc}-{version}"
     with lock_for(str(root)):
         if (root / ".installed").exists():
@@ -286,6 +293,8 @@ def _installed(kind: str, mc: str, version: str, url: str) -> pathlib.Path:
         installer = download(url, CACHE / "installers" / url.rsplit("/", 1)[1])
         shutil.rmtree(root, ignore_errors=True)
         root.mkdir(parents=True)
+        for name, source in (seed or {}).items():
+            shutil.copy2(source, root / name)
         log(f"installing {kind} {version} for {mc}")
         result = subprocess.run(
             [str(java_executable(java_major(mc))), "-jar", str(installer), "--installServer"],
@@ -315,7 +324,7 @@ def _from_install(root: pathlib.Path, mc: str) -> Server:
             if arg.startswith("@") and not arg.startswith("@libraries"):
                 files[arg[1:]] = root / arg[1:]
         return Server(java_major(mc), args + ["nogui"], files)
-    jar = next(p for p in root.glob("forge-*.jar") if "installer" not in p.name)
+    jar = next(p for p in root.glob("*forge-*.jar") if "installer" not in p.name)
     return Server(java_major(mc), ["-jar", jar.name, "nogui"], files)
 
 
@@ -324,9 +333,23 @@ def _from_install(root: pathlib.Path, mc: str) -> Server:
 FORGE_JDK = {"1.16.3": "jdk8u312-b07", "1.16.4": "jdk8u312-b07"}
 
 
+def forge_maven_version(mc: str, version: str) -> str:
+    """Old builds carry a branch suffix in Maven, such as 1.7.10-10.13.4.1614-1.7.10."""
+    metadata = cached_text(f"{FORGE_MAVEN}/maven-metadata.xml")
+    for full in re.findall(r"<version>([^<]+)</version>", metadata):
+        if full == f"{mc}-{version}" or full.startswith(f"{mc}-{version}-"):
+            return full
+    raise RuntimeError(f"no Forge {version} for {mc} in Maven")
+
+
 def forge(mc: str, version: str) -> Server:
-    url = f"{FORGE_MAVEN}/{mc}-{version}/forge-{mc}-{version}-installer.jar"
-    server = _from_install(_installed("forge", mc, version, url), mc)
+    full = forge_maven_version(mc, version)
+    url = f"{FORGE_MAVEN}/{full}/forge-{full}-installer.jar"
+    seed = None
+    if tuple(int(p) for p in mc.split(".")) < (1, 13):
+        # These installers fetch the vanilla jar from a retired Amazon S3 bucket unless it is already there.
+        seed = {f"minecraft_server.{mc}.jar": vanilla_jar(mc)}
+    server = _from_install(_installed("forge", mc, version, url, seed), mc)
     server.java_release = FORGE_JDK.get(mc)
     return server
 
@@ -574,7 +597,9 @@ def start_viaproxy(workdir: pathlib.Path, server_port: int, target: str) -> tupl
     return proxy, port
 
 
-def run_bot(scenarios: list[str], port: int, version: str, workdir: pathlib.Path, timeout: float = 150) -> dict:
+def run_bot(
+    scenarios: list[str], port: int, version: str, workdir: pathlib.Path, timeout: float = 150, warmup: bool = False
+) -> dict:
     """Run each scenario in a fresh session: before 1.17 the bot's inventory view
     goes stale after a container closes, so scenarios can't share one."""
     node = shutil.which("node")
@@ -588,6 +613,8 @@ def run_bot(scenarios: list[str], port: int, version: str, workdir: pathlib.Path
             client_version, target = VIA_ROUTES[version]
             proxy, port = start_viaproxy(workdir, port, target)
         env = dict(os.environ, MCTEST_NO_MOVEMENT="1" if version in NO_MOVEMENT else "0", MCTEST_SERVER_VERSION=version)
+        if warmup:
+            _bot_session(node, "warmup", port, client_version, env, timeout, "warmup")
         for scenario, name in zip(scenarios, BOT_NAMES):
             results[scenario] = _bot_session(node, scenario, port, client_version, env, timeout, name)
     finally:

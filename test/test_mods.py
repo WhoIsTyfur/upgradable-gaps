@@ -18,7 +18,8 @@ import sys
 
 import mctest
 
-BUILDS = [mctest.ROOT / "modern", mctest.ROOT / "ornithe"]
+# Build folder -> loader of its targets, when their gradle.properties do not name one.
+BUILDS = {mctest.ROOT / "modern": None, mctest.ROOT / "ornithe": "ornithe", mctest.ROOT / "forge-legacy": "forge"}
 SCENARIOS = ["upgrade", "upgradeBatch", "upgradeShort", "vanillaGoldenApple"]
 MOD_ID = "upgradablegaps"
 MIXIN_FAILURE = re.compile(r"InvalidInjectionException|InjectionError|MixinApplyError|Mixin apply .*failed|Critical injection failure")
@@ -35,16 +36,18 @@ def read_properties(path: pathlib.Path) -> dict[str, str]:
 
 def all_targets() -> list[dict]:
     targets = []
-    for build in BUILDS:
-        loader_version = read_properties(build / "gradle.properties")["fabric_loader_version"]
+    for build, default_loader in BUILDS.items():
+        loader_version = read_properties(build / "gradle.properties").get("fabric_loader_version")
         for folder in sorted((build / "targets").iterdir()):
             props = read_properties(folder / "gradle.properties")
-            jars = [j for j in (folder / "build" / "libs").glob("*.jar") if not j.name.endswith("-sources.jar")]
+            jars = [j for j in (folder / "build" / "libs").glob("*.jar") if not j.name.endswith(("-sources.jar", "-dev.jar"))]
+            selftest = sorted((folder / "build" / "selftest").glob("*-selftest.jar"))
             targets.append(
                 {
                     "name": folder.name,
-                    "loader": props.get("loom.platform", "ornithe"),
+                    "loader": props.get("loom.platform", default_loader),
                     "jar": jars[0] if jars else None,
+                    "selftest": selftest[0] if selftest else None,
                     "versions": props["game_versions"].split(","),
                     "fabric_loader": loader_version,
                 }
@@ -75,13 +78,23 @@ def test_one(target: dict, mc: str) -> dict:
         report.update(ok=False, error=f"no {target['loader']} build for {mc}")
         return report
     port = mctest.free_port()
-    workdir = mctest.prepare_instance(f"{target['name']}@{mc}", server, port, [target["jar"]])
+    content = [target["jar"]] + ([target["selftest"]] if target["selftest"] else [])
+    workdir = mctest.prepare_instance(f"{target['name']}@{mc}", server, port, content)
     process = mctest.start(server, workdir)
     try:
         if not process.wait_for(r"Done \(", timeout=900):
             report.update(ok=False, error="server did not finish starting", tail=process.lines[-40:])
             return report
-        report["bot"] = mctest.run_bot(SCENARIOS, port, mc, workdir)
+        if target["selftest"]:
+            # These servers turn vanilla clients away, so a test mod crafts on the server instead.
+            match = process.wait_for(r"UPGRADABLEGAPS-SELFTEST (.*)", timeout=60)
+            result = match.group(1).strip() if match else "no self-test result"
+            report["bot"] = {"ok": result == "PASS", "selftest": result}
+        else:
+            # Forge 1.9 runs its modded handshake on the first login after start, and a
+            # vanilla client stuck in it never spawns; a throwaway login clears it.
+            warmup = target["loader"] == "forge" and mc in ("1.9", "1.9.4")
+            report["bot"] = mctest.run_bot(SCENARIOS, port, mc, workdir, warmup=warmup)
         lines = mctest.server_log(workdir, process)
         # Forge 1.17 only logs the jar name at INFO level.
         report["loaded"] = any(MOD_ID in line or target["jar"].name in line for line in lines)

@@ -281,6 +281,11 @@ function report (result) {
 }
 
 async function main () {
+  if (scenario === 'warmup') {
+    // Only has to reach the server; whether it ever spawns does not matter.
+    await Promise.race([session(async () => {}), sleep(15000)])
+    return { ok: true }
+  }
   if (!scenarios[scenario]) throw new Error(`unknown scenario ${scenario}`)
   const outcome = await session(() => scenarios[scenario]())
   if (outcome.skipped) return { ok: true, skipped: outcome.skipped }

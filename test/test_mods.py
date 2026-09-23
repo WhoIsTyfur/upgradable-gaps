@@ -50,6 +50,7 @@ def all_targets() -> list[dict]:
                     "selftest": selftest[0] if selftest else None,
                     "versions": props["game_versions"].split(","),
                     "fabric_loader": loader_version,
+                    "released": props.get("publish") != "false",
                 }
             )
     return targets
@@ -138,6 +139,8 @@ def main() -> int:
     for target in targets:
         if target["loader"] not in loaders or (only_targets and target["name"] not in only_targets):
             continue
+        if not target["released"] and target["name"] not in only_targets:
+            continue  # publish=false targets run only when named with --targets
         if target["jar"] is None:
             parser.error(f"{target['name']} has no jar; build it first (./gradlew build in modern/ and ornithe/)")
         jobs += [(target, v) for v in target["versions"] if not only_versions or v in only_versions]

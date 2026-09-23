@@ -37,6 +37,10 @@ ADOPTIUM = (
     "https://api.adoptium.net/v3/assets/latest/{feature}/hotspot"
     "?architecture=x64&image_type=jdk&os={os}&vendor=eclipse"
 )
+ADOPTIUM_RELEASE = (
+    "https://api.adoptium.net/v3/assets/release_name/eclipse/{release}"
+    "?architecture=x64&heap_size=normal&image_type=jdk&os={os}&project=jdk"
+)
 FABRIC_META = "https://meta.fabricmc.net/v2"
 FORGE_MAVEN = "https://maven.minecraftforge.net/net/minecraftforge/forge"
 FORGE_PROMOTIONS = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json"
@@ -61,6 +65,8 @@ BOT_NAMES = [f"{BOT_NAME}{i}" for i in range(8)]
 
 # mineflayer 4.39.0 has no data for these; they share a protocol with the listed version.
 BOT_ALIASES = {
+    "1.9.3": "1.9.4",
+    "1.11.1": "1.11.2",
     "1.19.1": "1.19.2",
     "1.21.2": "1.21.3",
     "1.21.7": "1.21.8",
@@ -81,6 +87,7 @@ VIA_ROUTES = {
     "1.6.4": ("1.8.8", "1.6.4"),
     **{v: ("1.8.8", "1.7.2-1.7.5") for v in ("1.7.2", "1.7.3", "1.7.4", "1.7.5")},
     **{v: ("1.8.8", "1.7.6-1.7.10") for v in ("1.7.6", "1.7.7", "1.7.8", "1.7.9", "1.7.10")},
+    "1.9.1": ("1.9.4", "1.9.1"),
     "1.13.1": ("1.13.2", "1.13.1"),
     "1.14.2": ("1.14.4", "1.14.2"),
     "26.2": ("26.1", "26.2"),
@@ -138,19 +145,22 @@ def download(
         return dest
 
 
-def java_executable(major: int) -> pathlib.Path:
-    feature = 17 if major == 16 else major
-    home = CACHE / "jdk" / str(feature)
+def java_executable(major: int, release: str | None = None) -> pathlib.Path:
+    """Latest JDK of a major version, or an exact Adoptium release such as jdk8u312-b07."""
+    home = CACHE / "jdk" / (release or str(major))
     exe_name = "java.exe" if os.name == "nt" else "java"
     with lock_for(str(home)):
         found = sorted(home.glob(f"*/bin/{exe_name}"))
         if found:
             return found[0]
         os_name = {"Windows": "windows", "Linux": "linux", "Darwin": "mac"}[platform.system()]
-        assets = json.loads(http_get(ADOPTIUM.format(feature=feature, os=os_name)))
-        package = assets[0]["binary"]["package"]
+        if release:
+            info = json.loads(http_get(ADOPTIUM_RELEASE.format(release=release, os=os_name)))
+            package = info["binaries"][0]["package"]
+        else:
+            package = json.loads(http_get(ADOPTIUM.format(feature=major, os=os_name)))[0]["binary"]["package"]
         archive = download(package["link"], CACHE / "downloads" / package["name"], sha256=package["checksum"])
-        log(f"extracting JDK {feature}")
+        log(f"extracting JDK {release or major}")
         # Extract beside the target and rename, so a half-written JDK is never picked up.
         staging = home.with_name(home.name + ".extracting")
         shutil.rmtree(staging, ignore_errors=True)
@@ -235,6 +245,8 @@ class Server:
     content_folder: str = "mods"
     # Files to copy rather than link into the instance.
     copies: tuple[str, ...] = ()
+    # An exact JDK release, for servers that break on newer updates of their Java version.
+    java_release: str | None = None
 
 
 def vanilla(mc: str) -> Server:
@@ -307,15 +319,15 @@ def _from_install(root: pathlib.Path, mc: str) -> Server:
     return Server(java_major(mc), ["-jar", jar.name, "nogui"], files)
 
 
-# These Forge builds crash on current Java 8 updates (NoSuchMethodError in
-# ManifestEntryVerifier), a known ModLauncher bug; they run fine on Java 11.
-FORGE_JAVA = {"1.16.3": 11, "1.16.4": 11}
+# These Forge builds crash on JDK updates after 8u312 (NoSuchMethodError in
+# ManifestEntryVerifier), a known ModLauncher bug, so pin the last JDK they run on.
+FORGE_JDK = {"1.16.3": "jdk8u312-b07", "1.16.4": "jdk8u312-b07"}
 
 
 def forge(mc: str, version: str) -> Server:
     url = f"{FORGE_MAVEN}/{mc}-{version}/forge-{mc}-{version}-installer.jar"
     server = _from_install(_installed("forge", mc, version, url), mc)
-    server.java_major = FORGE_JAVA.get(mc, server.java_major)
+    server.java_release = FORGE_JDK.get(mc)
     return server
 
 
@@ -348,10 +360,26 @@ def ornithe(mc: str, loader_version: str) -> Server:
     files = {
         "fabric-server-launch.jar": root / "fabric-server-launch.jar",
         "libraries": root / "libraries",
-        "server.jar": vanilla_jar(mc),
+        "server.jar": _without_log4j(mc),
     }
     # Fabric Loader on these old versions breaks when libraries/ is a junction, so copy it.
     return Server(java_major(mc), ["-jar", "fabric-server-launch.jar", "nogui"], files, copies=("libraries",))
+
+
+def _without_log4j(mc: str) -> pathlib.Path:
+    """The old server jars bundle their own log4j. Depending on the instance path, Fabric
+    Loader may load it ahead of the newer log4j it ships and fail at boot, so drop it."""
+    target = CACHE / "vanilla-nolog4j" / mc / "server.jar"
+    with lock_for(str(target)):
+        if not target.exists():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp = target.with_suffix(".part")
+            with zipfile.ZipFile(vanilla_jar(mc)) as src, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as dst:
+                for info in src.infolist():
+                    if not info.filename.startswith("org/apache/logging/log4j/"):
+                        dst.writestr(info, src.read(info.filename))
+            tmp.replace(target)
+    return target
 
 
 def fill_versions(project: str) -> list[str]:
@@ -498,6 +526,8 @@ def prepare_instance(name: str, server: Server, port: int, content: list[pathlib
         "generate-structures": "false",
         "spawn-protection": "0",
         "spawn-monsters": "false",
+        # spawn-monsters alone still let a slime kill the bot on 26.1.2.
+        "difficulty": "0",
         "view-distance": "4",
         "simulation-distance": "4",
         "max-tick-time": "-1",
@@ -517,7 +547,7 @@ def start(server: Server, workdir: pathlib.Path) -> Process:
     # Headless: without a console, some servers (CraftBukkit 1.14-1.17) pop a desktop
     # "don't double-click the jar" dialog and hang.
     jvm = ["-Xms512M", "-Xmx2G", "-Djava.awt.headless=true", "-Dlog4j2.formatMsgNoLookups=true"]
-    return Process([str(java_executable(server.java_major)), *jvm, *server.args], workdir)
+    return Process([str(java_executable(server.java_major, server.java_release)), *jvm, *server.args], workdir)
 
 
 def start_viaproxy(workdir: pathlib.Path, server_port: int, target: str) -> tuple[Process, int]:

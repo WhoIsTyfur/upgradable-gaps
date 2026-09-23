@@ -11,6 +11,27 @@ plugins {
     id 'dev.architectury.loom-no-remap' version '1.17.493' apply false
 }
 
+// The "pack" object of a pack.mcmeta covering data pack formats "min" or "min-max".
+// 1.20.2 added supported_formats and 1.21.9 (format 82) replaced it with min/max_format.
+def packSection(String formats) {
+    if (formats == null) {
+        return ''
+    }
+    def (min, max) = formats.contains('-') ? formats.split('-')*.toInteger() : [formats.toInteger(), formats.toInteger()]
+    def pack = [description: 'Upgradable Gaps']
+    if (min < 82) {
+        pack.pack_format = min
+        if (max != min) {
+            pack.supported_formats = [min, max]
+        }
+    }
+    if (max >= 82) {
+        pack.min_format = min
+        pack.max_format = max
+    }
+    return groovy.json.JsonOutput.toJson(pack)
+}
+
 subprojects {
     def mc = property('minecraft_version') as String
     def loader = property('loom.platform') as String
@@ -72,10 +93,11 @@ subprojects {
         minecraft_range: property('minecraft_range'),
         java_version   : javaVersion,
         forge_range    : findProperty('forge_range') ?: '',
+        pack           : packSection(findProperty('pack_formats') as String),
     ]
     processResources {
         inputs.properties expanded
-        filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+        filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
             expand expanded
         }
     }

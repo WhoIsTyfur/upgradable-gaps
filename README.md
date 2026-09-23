@@ -1,8 +1,9 @@
 # Upgradable Gaps
 
-Upgrade a golden apple into an enchanted golden apple. Everything is
-server-side: players need nothing extra (except on very old Forge, see
-*Installing*), and it works in singleplayer too.
+Upgrade a golden apple into an enchanted golden apple. with 64 gold ingots.
+Everything in this mod is server-side: players will need nothing extra with the
+exception of very old Forge versions, see *Installing*), and it obviously works
+in single-player worlds too.
 
 | Server | Minecraft | Jar |
 | --- | --- | --- |
@@ -17,11 +18,11 @@ The Forge range skips the Minecraft versions Forge itself never shipped (1.16,
 
 ## The recipe
 
-Put **8 gold ingots in each** of the 8 outer slots of a crafting table, with a
-golden apple in the centre. That is 64 ingots plus the golden apple's 8: the
-same 72 ingots' worth of gold as the old notch apple recipe.
+Place **8 gold ingots in each** of the 8 outer slots of a crafting table, with a
+golden apple in the center. That is a total of 64 ingots plus the golden apple's 8:
+the same 72 ingots worth of gold as the old notch apple recipe.
 
-## Why this needs a mod
+## Why this needs a mod instead of a data pack
 
 Vanilla crafting cannot express "a stack of items in one slot". An
 `Ingredient` in recipe JSON has no count field, and the result slot removes

@@ -1,0 +1,10 @@
+[
+  {
+    "modid": "upgradablegaps",
+    "name": "Upgradable Gaps",
+    "description": "Upgrade a golden apple into an enchanted golden apple with 8 gold ingots in each surrounding slot. Only the server needs it.",
+    "version": "${version}",
+    "mcversion": "${mc}",
+    "authorList": ["Tyler Fursman"]
+  }
+]

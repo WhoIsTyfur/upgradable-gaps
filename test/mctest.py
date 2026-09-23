@@ -50,6 +50,12 @@ ORNITHE_INSTALLER = (
     "https://maven.ornithemc.net/releases/net/ornithemc/ornithe-installer/0.16.0/ornithe-installer-0.16.0.jar",
     "ca35f1233bd5c44c07df297d4173aabea0f5c3f5b1d138bce9e6938547d7ae8a",
 )
+QUILT_META = "https://meta.quiltmc.org/v3"
+# Pinned: Quilt's meta lists stale hashes for this installer; these match its Maven checksums.
+QUILT_INSTALLER = (
+    "https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/0.15.1/quilt-installer-0.15.1.jar",
+    "0a229138caa1b87fd8f5622038410696f98bb85871a279640e7002404c4d0dc2",
+)
 FILL = "https://fill.papermc.io/v3/projects"
 PURPUR_API = "https://api.purpurmc.org/v2/purpur"
 BUILDTOOLS = "https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar"
@@ -387,6 +393,40 @@ def ornithe(mc: str, loader_version: str) -> Server:
     }
     # Fabric Loader on these old versions breaks when libraries/ is a junction, so copy it.
     return Server(java_major(mc), ["-jar", "fabric-server-launch.jar", "nogui"], files, copies=("libraries",))
+
+
+def quilt_versions() -> set[str]:
+    return {v["version"] for v in cached_json(f"{QUILT_META}/versions/game") if v["stable"]}
+
+
+def quilt_loader_version() -> str:
+    return next(v["version"] for v in cached_json(f"{QUILT_META}/versions/loader") if "-" not in v["version"])
+
+
+def quilt(mc: str, loader_version: str) -> Server:
+    """Quilt Loader, which also runs Fabric mods, installed by Quilt's installer next to the vanilla jar."""
+    root = CACHE / "installs" / f"quilt-{mc}-{loader_version}"
+    with lock_for(str(root)):
+        if not (root / "quilt-server-launch.jar").exists():
+            url, sha256 = QUILT_INSTALLER
+            installer = download(url, CACHE / "installers" / url.rsplit("/", 1)[1], sha256=sha256)
+            shutil.rmtree(root, ignore_errors=True)
+            root.mkdir(parents=True)
+            log(f"installing quilt {loader_version} for {mc}")
+            result = subprocess.run(
+                [str(java_executable(21)), "-jar", str(installer), "install", "server", mc, loader_version,
+                 f"--install-dir={root}"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=600,
+            )
+            if not (root / "quilt-server-launch.jar").exists():
+                raise RuntimeError(f"quilt installer failed: {result.stdout[-2000:]} {result.stderr[-2000:]}")
+    files = {p.name: p for p in root.iterdir() if p.name != "server.jar"}
+    files["server.jar"] = vanilla_jar(mc)
+    return Server(java_major(mc), ["-jar", "quilt-server-launch.jar", "nogui"], files)
 
 
 def _without_log4j(mc: str) -> pathlib.Path:

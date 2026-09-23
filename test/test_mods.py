@@ -61,6 +61,9 @@ def server_for(target: dict, mc: str) -> tuple[mctest.Server | None, str]:
         return mctest.fabric(mc, target["fabric_loader"]), target["fabric_loader"]
     if loader == "ornithe":
         return mctest.ornithe(mc, target["fabric_loader"]), target["fabric_loader"]
+    if loader == "quilt":
+        version = mctest.quilt_loader_version()
+        return mctest.quilt(mc, version), version
     if loader == "forge":
         version = mctest.forge_version(mc)
         return (mctest.forge(mc, version) if version else None), version
@@ -111,7 +114,7 @@ def test_one(target: dict, mc: str) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--loaders", default="fabric,forge,neoforge,ornithe")
+    parser.add_argument("--loaders", default="fabric,quilt,forge,neoforge,ornithe")
     parser.add_argument("--targets", default="", help="comma-separated target folder names")
     parser.add_argument("--versions", default="", help="only these Minecraft versions")
     parser.add_argument("--jobs", type=int, default=4)
@@ -123,8 +126,16 @@ def main() -> int:
     if not (mctest.BOT / "node_modules").exists():
         parser.error("run `npm ci` in test/bot first")
 
+    targets = all_targets()
+    if "quilt" in loaders:
+        # Quilt Loader runs Fabric mods, so the Fabric jars get a second run on it.
+        supported = mctest.quilt_versions()
+        for target in [t for t in targets if t["loader"] == "fabric"]:
+            versions = [v for v in target["versions"] if v in supported]
+            targets.append(dict(target, name=target["name"] + "-on-quilt", loader="quilt", versions=versions))
+
     jobs = []
-    for target in all_targets():
+    for target in targets:
         if target["loader"] not in loaders or (only_targets and target["name"] not in only_targets):
             continue
         if target["jar"] is None:

@@ -1,0 +1,30 @@
+{
+	"schemaVersion": 1,
+	"id": "craftablenotchapples",
+	"version": "${version}",
+
+	"name": "Craftable Notch Apples",
+	"description": "Adds a server-side crafting recipe for the enchanted golden apple. Vanilla clients can connect without installing anything.",
+	"authors": [
+		"Tyler Fursman"
+	],
+	"license": "MPL-2.0",
+
+	"environment": "*",
+
+	"entrypoints": {
+		"main": [
+			"org.tyfur.craftablenotchapples.CraftableNotchApples"
+		]
+	},
+
+	"mixins": [
+		"craftablenotchapples.mixins.json"
+	],
+
+	"depends": {
+		"fabricloader": ">=0.16.0",
+		"minecraft": ">=1.21.1 <1.21.2",
+		"java": ">=21"
+	}
+}

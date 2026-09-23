@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"package": "org.tyfur.craftablenotchapples.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [
+		"CraftingResultSlotMixin",
+		"CraftingScreenHandlerMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

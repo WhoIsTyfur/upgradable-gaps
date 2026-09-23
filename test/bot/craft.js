@@ -204,13 +204,14 @@ async function setUp (items) {
 
 async function finish (window, checks, expected) {
   const grid = describe(window, [RESULT, ...GRID])
-  // Before 1.8, closing the table throws the grid where the player looks; aim at the feet.
-  if (serverBefore('1.8')) {
+  // Before 1.12, closing the table throws the grid where the player looks instead of
+  // returning it to the inventory; aim at the feet and wait out the pickup delay.
+  if (serverBefore('1.12')) {
     await bot.look(bot.entity.yaw, -Math.PI / 2, true)
     await sleep(400)
   }
   bot.closeWindow(window)
-  await sleep(serverBefore('1.8') ? 2500 : 500)
+  await sleep(serverBefore('1.12') ? 2500 : 500)
   return { checks, expected, grid }
 }
 

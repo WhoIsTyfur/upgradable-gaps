@@ -95,9 +95,9 @@ def test_one(target: dict, mc: str) -> dict:
             result = match.group(1).strip() if match else "no self-test result"
             report["bot"] = {"ok": result == "PASS", "selftest": result}
         else:
-            # Forge 1.9 runs its modded handshake on the first login after start, and a
-            # vanilla client stuck in it never spawns; a throwaway login clears it.
-            warmup = target["loader"] == "forge" and mc in ("1.9", "1.9.4")
+            # Forge 1.8-1.12 sometimes runs its modded handshake on the first login after
+            # start, and a vanilla client stuck in it never spawns; a throwaway login clears it.
+            warmup = target["loader"] == "forge" and tuple(int(p) for p in mc.split(".")) < (1, 13)
             report["bot"] = mctest.run_bot(SCENARIOS, port, mc, workdir, warmup=warmup)
         lines = mctest.server_log(workdir, process)
         # Forge 1.17 only logs the jar name at INFO level.

@@ -189,7 +189,7 @@ def java_executable(major: int, release: str | None = None) -> pathlib.Path:
         if found:
             return found[0]
         if major == 7:
-            raise RuntimeError(f"no Java 7 JDK: Adoptium has none, so extract Azul's Zulu 7 zip into {home}")
+            raise RuntimeError(f"no Java 7 JDK: Adoptium has none, so put one (Azul Zulu 7, Oracle 7u80) in {home}")
         os_name = {"Windows": "windows", "Linux": "linux", "Darwin": "mac"}[platform.system()]
         if release:
             info = json.loads(http_get(ADOPTIUM_RELEASE.format(release=release, os=os_name)))

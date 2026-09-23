@@ -13,7 +13,7 @@ server-side: players need nothing extra (except on very old Forge, see
 | Bukkit, Spigot, Paper, Purpur, Folia | 1.7.10 - 26.3 | `+bukkit` (one jar for all) |
 
 The Forge range skips the Minecraft versions Forge itself never shipped (1.16,
-1.17, 1.20.5, 1.21.2 and so on), and 1.7.2 for the reason under *Installing*.
+1.17, 1.20.5, 1.21.2 and so on).
 
 ## The recipe
 
@@ -64,8 +64,7 @@ Drop the jar for your server and Minecraft version into `mods/` (or
   so players need Forge installed. They do not need this mod.
 - **Forge 1.3.2 - 1.5.2** has one jar per Minecraft version: Forge that old
   loads mods by obfuscated names, which change with every release.
-- **Forge 1.7.2** is not built: that Forge only starts on Java 7, which the
-  test harness cannot get. The 1.7.10 jar may still work there.
+- **Forge 1.7.2** only starts on Java 7; the one jar covers 1.7.2 and 1.7.10.
 - **NeoForge:** any build for your Minecraft version.
 - **Plugin:** one jar for every Bukkit-based server from 1.7.10 on, Folia
   included.
@@ -152,7 +151,9 @@ Forge servers up to 1.7.10 refuse vanilla clients, so for them a small
 test-only mod crafts through a real workbench menu on the server instead and
 logs `UPGRADABLEGAPS-SELFTEST PASS`. Forge 1.3.2 - 1.5.2 also download
 libraries at start from a host that is gone; the harness takes them from
-Prism Launcher's mirror and checks each against the SHA-1 FML expects. Results go to `run/results.json` and
+Prism Launcher's mirror and checks each against the SHA-1 FML expects. Forge
+1.7.2 needs a Java 7 JDK, which Adoptium does not ship: put one (Azul Zulu 7
+or Oracle 7u80) in `~/.cache/mctest/jdk/7/`. Results go to `run/results.json` and
 `run/plugin-results.json`.
 
 ## Releasing

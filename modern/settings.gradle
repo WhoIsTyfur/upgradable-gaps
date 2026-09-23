@@ -1,0 +1,26 @@
+/*
+ * Copyright (c) 2026 Tyler Fursman
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.architectury.dev/' }
+        maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.neoforged.net/releases/' }
+        maven { url = 'https://maven.minecraftforge.net/' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'upgradable-gaps'
+
+// One subproject per loader + Minecraft range; each folder's gradle.properties describes it.
+file('targets').eachDir { dir ->
+    include dir.name
+    project(":${dir.name}").projectDir = dir
+}

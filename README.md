@@ -8,9 +8,12 @@ file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 # Upgradable Gaps
 
-Upgrade a golden apple into an enchanted golden apple on **Minecraft 1.21.1
-(Fabric)**. Everything is server-side: vanilla clients can connect without
-installing anything.
+Upgrade a golden apple into an enchanted golden apple. Everything is
+server-side: vanilla clients can connect without installing anything, and it
+works in singleplayer too.
+
+Built for **Fabric (and Quilt) 1.14 - 26.3**, **NeoForge 1.20.2 - 26.3** and
+**Forge 1.15.2 - 26.3**.
 
 ## The recipe
 
@@ -21,41 +24,54 @@ same 72 ingots' worth of gold as the old notch apple recipe.
 ## Why this needs a mod
 
 Vanilla crafting cannot express "a stack of items in one slot". An
-`Ingredient` in recipe JSON has no count field, and
-`CraftingResultSlot#onTakeItem` hard-codes `removeStack(slot, 1)` for every
-filled slot. A data pack recipe asking for gold ingots around a golden apple
+`Ingredient` in recipe JSON has no count field, and `ResultSlot#onTake`
+removes exactly one item from every filled slot. A data pack recipe asking for gold ingots around a golden apple
 would cost 8 ingots, not 64, and there is no JSON knob that changes it.
 
 So the mod does two things with Mixin:
 
-- **`CraftingScreenHandlerMixin`** puts the enchanted apple in the result slot
-  when the grid matches.
-- **`CraftingResultSlotMixin`** takes 8 ingots from each outer slot, instead of
-  one, when it is crafted.
+- **`CraftingMenuMixin`** puts the enchanted apple in the result slot when the
+  grid matches.
+- **`ResultSlotMixin`** takes 8 ingots from each outer slot, instead of one,
+  when it is crafted.
 
 It registers **nothing** into any registry and adds no recipe serializer. That
-is what keeps vanilla clients able to join: on 1.21.1 the server sends every
+is what keeps vanilla clients able to join: since 1.13 the server sends every
 recipe to every client on login, and a vanilla client cannot decode a recipe
 type it doesn't have.
 
 ## Installing
 
-Drop `upgradable-gaps-1.0.0.jar` into `<server>/mods/` and restart. Needs
-Fabric Loader 0.16.0+. No Fabric API required.
+Drop the jar for your loader and Minecraft version into `<server>/mods/` and
+restart. Jars are named `upgradable-gaps-<version>+<loader>-mc<versions>.jar`.
 
-## Building the jar
+- **Fabric / Quilt:** any Fabric Loader 0.14+. No Fabric API needed.
+- **NeoForge:** any build for your Minecraft version.
+- **Forge:** 1.15.2 needs Forge 31.2.44 or newer (the first with Mixin).
 
-Needs **JDK 21**. Minecraft 1.21.1 targets Java 21, and Gradle 8.11 cannot run
-on Java 24 or newer, so if your default JDK is newer than 23, uncomment
-`org.gradle.java.home` in `gradle.properties` and point it at a JDK 21.
+## Building
+
+The mod lives in `modern/`, one Gradle build with a subproject per loader and
+Minecraft range (`modern/targets/<loader>-<versions>/gradle.properties`).
+Gradle must run on **JDK 25**; older targets are compiled with `--release`.
 
 ```
-.\gradlew.bat build      # Windows (PowerShell or cmd)
-./gradlew build          # macOS / Linux / Git Bash
+cd modern
+./gradlew build                                  # every target
+./gradlew :fabric-1.21-1.21.1:build              # one target
 ```
 
-The jar lands in `build/libs/upgradable-gaps-1.0.0.jar`. Ignore the
-`-sources.jar`.
+Jars land in `modern/targets/<target>/build/libs/`.
+
+Mixin target signatures changed several times, so the source is split by what
+actually changed rather than by version:
+
+- `src/common` -- the recipe itself (`Upgrade`), the same for every version.
+- `src/menu/<first version>` -- `CraftingMenuMixin`, one variant per signature
+  of `slotChangedCraftingGrid` (1.14.4, 1.17, 1.17.1, 1.21, 1.21.2).
+- `src/slot/<first version>` -- `ResultSlotMixin` (1.14.4, 1.17).
+- `src/fabric`, `src/neoforge`, `src/neoforge-1.20.2`, `src/forge` -- loader
+  metadata and entry points.
 
 ## Things worth knowing
 
@@ -85,10 +101,10 @@ The jar lands in `build/libs/upgradable-gaps-1.0.0.jar`. Ignore the
 
 ## Tuning the amount
 
-`NotchAppleRecipes` holds the constant:
+`Upgrade` holds the constant:
 
 ```java
-public static final int INGOTS_PER_SLOT_WITH_GOLDEN_APPLE = 8;
+public static final int INGOTS_PER_SLOT = 8;
 ```
 
 Both the match and the consumption read from it, so they stay in step. Change

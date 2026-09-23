@@ -1,0 +1,20 @@
+{
+	"schemaVersion": 1,
+	"id": "upgradablegaps",
+	"version": "${version}",
+	"name": "Upgradable Gaps",
+	"description": "Upgrade a golden apple into an enchanted golden apple with 8 gold ingots in each surrounding slot. Server-side; vanilla clients can join.",
+	"authors": [
+		"Tyler Fursman"
+	],
+	"license": "MPL-2.0",
+	"environment": "*",
+	"mixins": [
+		"upgradablegaps.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.14.0",
+		"minecraft": "${minecraft_range}",
+		"java": ">=${java_version}"
+	}
+}

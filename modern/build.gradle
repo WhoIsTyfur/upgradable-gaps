@@ -1,0 +1,96 @@
+/*
+ * Copyright (c) 2026 Tyler Fursman
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+plugins {
+    id 'dev.architectury.loom' version '1.17.493' apply false
+    id 'dev.architectury.loom-no-remap' version '1.17.493' apply false
+}
+
+subprojects {
+    def mc = property('minecraft_version') as String
+    def loader = property('loom.platform') as String
+    def glue = (findProperty('glue') ?: loader) as String
+    def javaVersion = (property('java_version') as String).toInteger()
+    def gameVersions = (property('game_versions') as String).split(',')
+    // 26.1 stopped obfuscating the game, so those builds have nothing to remap.
+    def unobfuscated = !mc.startsWith('1.')
+
+    apply plugin: unobfuscated ? 'dev.architectury.loom-no-remap' : 'dev.architectury.loom'
+
+    def label = gameVersions.size() == 1 ? gameVersions[0] : "${gameVersions.first()}-${gameVersions.last()}"
+    version = "${rootProject.mod_version}+${loader}-mc${label}"
+    group = 'org.tyfur.upgradablegaps'
+    base.archivesName = 'upgradable-gaps'
+
+    repositories {
+        maven { url = 'https://maven.neoforged.net/releases/' }
+        maven { url = 'https://maven.minecraftforge.net/' }
+    }
+
+    dependencies {
+        minecraft "com.mojang:minecraft:${mc}"
+        if (!unobfuscated) {
+            mappings loom.officialMojangMappings()
+        }
+        if (loader == 'fabric') {
+            add(unobfuscated ? 'implementation' : 'modImplementation', "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}")
+        } else if (loader == 'neoforge') {
+            neoForge "net.neoforged:neoforge:${property('neoforge_version')}"
+        } else if (loader == 'forge') {
+            forge "net.minecraftforge:forge:${mc}-${property('forge_version')}"
+        }
+    }
+
+    if (loader == 'forge') {
+        loom {
+            forge {
+                mixinConfig 'upgradablegaps.mixins.json'
+            }
+        }
+    } else if (glue == 'neoforge-1.20.2') {
+        // NeoForge before 1.20.5 has no [[mixins]] table and reads the manifest instead.
+        jar.manifest.attributes('MixinConfigs': 'upgradablegaps.mixins.json')
+    }
+
+    sourceSets.main {
+        java.srcDirs = [
+            "${rootDir}/src/common/java",
+            "${rootDir}/src/menu/${property('menu')}/java",
+            "${rootDir}/src/slot/${property('slot')}/java",
+            "${rootDir}/src/${glue}/java",
+        ]
+        resources.srcDirs = ["${rootDir}/src/common/resources", "${rootDir}/src/${glue}/resources"]
+    }
+
+    def expanded = [
+        version        : version,
+        minecraft_range: property('minecraft_range'),
+        java_version   : javaVersion,
+        forge_range    : findProperty('forge_range') ?: '',
+    ]
+    processResources {
+        inputs.properties expanded
+        filesMatching(['fabric.mod.json', 'META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
+            expand expanded
+        }
+    }
+
+    java {
+        withSourcesJar()
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.release = javaVersion
+        options.encoding = 'UTF-8'
+        options.compilerArgs << '-Xlint:-options'
+    }
+
+    tasks.withType(Jar).configureEach {
+        from(rootProject.file('../LICENSE'))
+    }
+}

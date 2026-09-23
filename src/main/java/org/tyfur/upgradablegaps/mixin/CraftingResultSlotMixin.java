@@ -1,4 +1,4 @@
-package org.tyfur.craftablenotchapples.mixin;
+package org.tyfur.upgradablegaps.mixin;
 
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.RecipeInputInventory;
@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.tyfur.craftablenotchapples.NotchAppleRecipes;
+import org.tyfur.upgradablegaps.NotchAppleRecipes;
 
 @Mixin(CraftingResultSlot.class)
 public abstract class CraftingResultSlotMixin {
@@ -27,7 +27,7 @@ public abstract class CraftingResultSlotMixin {
 		at = @At("HEAD"),
 		cancellable = true
 	)
-	private void craftablenotchapples$consumeWholeStacks(PlayerEntity player, ItemStack stack, CallbackInfo ci) {
+	private void upgradablegaps$consumeWholeStacks(PlayerEntity player, ItemStack stack, CallbackInfo ci) {
 		int perSlot = NotchAppleRecipes.ingotsPerSlot(this.input);
 		if (perSlot == NotchAppleRecipes.NO_MATCH) {
 			return;

@@ -1,10 +1,10 @@
 {
 	"schemaVersion": 1,
-	"id": "craftablenotchapples",
+	"id": "upgradablegaps",
 	"version": "${version}",
 
-	"name": "Craftable Notch Apples",
-	"description": "Adds a server-side crafting recipe for the enchanted golden apple. Vanilla clients can connect without installing anything.",
+	"name": "Upgradable Gaps",
+	"description": "Upgrade a golden apple into an enchanted golden apple with 8 gold ingots in each surrounding slot. Server-side; vanilla clients can join.",
 	"authors": [
 		"Tyler Fursman"
 	],
@@ -14,12 +14,12 @@
 
 	"entrypoints": {
 		"main": [
-			"org.tyfur.craftablenotchapples.CraftableNotchApples"
+			"org.tyfur.upgradablegaps.UpgradableGaps"
 		]
 	},
 
 	"mixins": [
-		"craftablenotchapples.mixins.json"
+		"upgradablegaps.mixins.json"
 	],
 
 	"depends": {

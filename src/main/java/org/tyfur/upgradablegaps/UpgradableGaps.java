@@ -1,12 +1,12 @@
-package org.tyfur.craftablenotchapples;
+package org.tyfur.upgradablegaps;
 
 import net.fabricmc.api.ModInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /** Registers nothing and adds no recipe types, so vanilla clients can join. */
-public class CraftableNotchApples implements ModInitializer {
-	public static final String MOD_ID = "craftablenotchapples";
+public class UpgradableGaps implements ModInitializer {
+	public static final String MOD_ID = "upgradablegaps";
 	private static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
 	@Override

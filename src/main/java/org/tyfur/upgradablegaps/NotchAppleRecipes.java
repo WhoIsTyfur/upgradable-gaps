@@ -1,4 +1,4 @@
-package org.tyfur.craftablenotchapples;
+package org.tyfur.upgradablegaps;
 
 import net.minecraft.inventory.RecipeInputInventory;
 import net.minecraft.item.ItemStack;

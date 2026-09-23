@@ -1,4 +1,4 @@
-package org.tyfur.craftablenotchapples.mixin;
+package org.tyfur.upgradablegaps.mixin;
 
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.inventory.CraftingResultInventory;
@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-import org.tyfur.craftablenotchapples.NotchAppleRecipes;
+import org.tyfur.upgradablegaps.NotchAppleRecipes;
 
 @Mixin(CraftingScreenHandler.class)
 public class CraftingScreenHandlerMixin {
@@ -26,7 +26,7 @@ public class CraftingScreenHandlerMixin {
 		method = "updateResult(Lnet/minecraft/screen/ScreenHandler;Lnet/minecraft/world/World;Lnet/minecraft/entity/player/PlayerEntity;Lnet/minecraft/inventory/RecipeInputInventory;Lnet/minecraft/inventory/CraftingResultInventory;Lnet/minecraft/recipe/RecipeEntry;)V",
 		at = @At("RETURN")
 	)
-	private static void craftablenotchapples$overrideResult(
+	private static void upgradablegaps$overrideResult(
 			ScreenHandler handler,
 			World world,
 			PlayerEntity player,

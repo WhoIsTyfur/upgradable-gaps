@@ -1,0 +1,67 @@
+/*
+ * Copyright (c) 2026 Tyler Fursman
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+plugins {
+    id 'java'
+}
+
+group = 'org.tyfur.upgradablegaps'
+version = mod_version
+
+repositories {
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/snapshots/' }
+    maven { url = 'https://hub.spigotmc.org/nexus/content/repositories/public/' }
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    mavenCentral()
+}
+
+configurations {
+    oldestApi
+    newestApi
+}
+
+dependencies {
+    compileOnly 'org.spigotmc:spigot-api:1.8.8-R0.1-SNAPSHOT'
+    oldestApi oldest_api
+    newestApi newest_api
+}
+
+java {
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 8
+    options.encoding = 'UTF-8'
+    options.compilerArgs << '-Xlint:-options'
+}
+
+// The jar is built against 1.8.8; recompiling the same source against the oldest
+// and newest server APIs catches any method that is missing at either end.
+['oldestApi': 8, 'newestApi': 25].each { name, release ->
+    def check = tasks.register("compileAgainst${name.capitalize()}", JavaCompile) {
+        source = sourceSets.main.java
+        classpath = configurations[name]
+        destinationDirectory = layout.buildDirectory.dir("api-check/${name}")
+        options.release = release
+    }
+    tasks.named('check') { dependsOn check }
+}
+
+processResources {
+    inputs.property 'version', version
+    filesMatching('plugin.yml') {
+        expand version: version
+    }
+}
+
+tasks.withType(Jar).configureEach {
+    archiveBaseName = 'upgradable-gaps'
+    archiveVersion = "${version}+bukkit"
+    from(rootProject.file('../LICENSE'))
+}

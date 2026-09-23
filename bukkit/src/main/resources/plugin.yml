@@ -1,0 +1,14 @@
+# Copyright (c) 2026 Tyler Fursman
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+name: UpgradableGaps
+version: '${version}'
+main: org.tyfur.upgradablegaps.bukkit.UpgradableGapsPlugin
+# The only value every server from 1.13 to 26.3 accepts; older servers ignore it.
+api-version: '1.13'
+folia-supported: true
+author: Tyler Fursman
+description: Upgrade a golden apple into an enchanted golden apple with 8 gold ingots in each surrounding slot.

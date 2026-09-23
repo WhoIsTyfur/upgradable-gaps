@@ -8,7 +8,7 @@ server-side: players need nothing extra (except on very old Forge, see
 | --- | --- | --- |
 | Fabric, Quilt | 1.14 - 26.3 | `+fabric-mc<versions>` |
 | Ornithe (Fabric Loader on old versions) | 1.3.1 - 1.13.2 | `+ornithe-mc<versions>` |
-| Forge | 1.6.1 - 26.3 | `+forge-mc<versions>` |
+| Forge | 1.3.2 - 26.3 | `+forge-mc<versions>` |
 | NeoForge | 1.20.2 - 26.3 | `+neoforge-mc<versions>` |
 | Bukkit, Spigot, Paper, Purpur, Folia | 1.7.10 - 26.3 | `+bukkit` (one jar for all) |
 
@@ -38,7 +38,7 @@ hooks in depends on the platform:
   the crafting menu's grid update and one on the result slot.
 - **JS coremods** (Forge 1.13.2 - 1.15.1, which has no Mixin): the same two
   hooks, injected through Forge's own coremod system.
-- **A registered recipe plus crafting events** (Forge 1.6.1 - 1.12.2): before
+- **A registered recipe plus crafting events** (Forge 1.3.2 - 1.12.2): before
   1.13 the server never sends its recipes to clients, so a real recipe is safe
   there.
 - **Inventory events** (the plugin): it cancels the click on the result slot
@@ -60,13 +60,12 @@ Drop the jar for your server and Minecraft version into `mods/` (or
 - **Ornithe:** install Fabric Loader with the Ornithe installer first; these
   jars do not run on Legacy Fabric.
 - **Forge 1.15.2** needs Forge 31.2.44 or newer (the first with Mixin).
-- **Forge 1.6.1 - 1.7.10:** Forge servers this old turn vanilla clients away,
+- **Forge 1.3.2 - 1.7.10:** Forge servers this old turn vanilla clients away,
   so players need Forge installed. They do not need this mod.
+- **Forge 1.3.2 - 1.5.2** has one jar per Minecraft version: Forge that old
+  loads mods by obfuscated names, which change with every release.
 - **Forge 1.7.2** is not built: that Forge only starts on Java 7, which the
   test harness cannot get. The 1.7.10 jar may still work there.
-- **Forge 1.3.2 - 1.5.2** jars build but are not released: running those
-  servers needs FML libraries that are now only mirrored by third parties, so
-  they are untested.
 - **NeoForge:** any build for your Minecraft version.
 - **Plugin:** one jar for every Bukkit-based server from 1.7.10 on, Folia
   included.
@@ -151,7 +150,9 @@ python test/test_mods.py --targets fabric-26.1-26.3 --versions 26.3   # one run
 
 Forge servers up to 1.7.10 refuse vanilla clients, so for them a small
 test-only mod crafts through a real workbench menu on the server instead and
-logs `UPGRADABLEGAPS-SELFTEST PASS`. Results go to `run/results.json` and
+logs `UPGRADABLEGAPS-SELFTEST PASS`. Forge 1.3.2 - 1.5.2 also download
+libraries at start from a host that is gone; the harness takes them from
+Prism Launcher's mirror and checks each against the SHA-1 FML expects. Results go to `run/results.json` and
 `run/plugin-results.json`.
 
 ## Releasing

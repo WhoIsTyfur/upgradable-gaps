@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Re-runs a release with main's current scripts, e.g. after fixing publish.py.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to release, e.g. v1.0.0"
+        required: true
 
 permissions:
   contents: write
@@ -10,11 +16,13 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v5
 
       - name: Check the tag matches mod_version
-        run: test "${GITHUB_REF_NAME#v}" = "$(python3 -c 'import build; print(build.mod_version())')"
+        run: test "${TAG#v}" = "$(python3 -c 'import build; print(build.mod_version())')"
 
       - name: Build
         run: python3 build.py
@@ -33,5 +41,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes="$(python3 -c "import publish; print(publish.changelog_for('${GITHUB_REF_NAME#v}'))")"
-          gh release create "$GITHUB_REF_NAME" dist/*.jar --title "Upgradable Gaps ${GITHUB_REF_NAME#v}" --notes "$notes"
+          notes="$(python3 -c "import publish; print(publish.changelog_for('${TAG#v}'))")"
+          gh release create "$TAG" dist/*.jar --title "Upgradable Gaps ${TAG#v}" --notes "$notes"

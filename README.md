@@ -174,6 +174,10 @@ SpigotMC, which has no upload API, and the CurseForge Bukkit Plugins project,
 whose API (on dev.bukkit.org) only takes a legacy Twitch login.
 `python publish.py --dry-run` prints every upload without sending anything.
 
+If a run fails partway, fix the scripts on `main`, delete whatever the failed run
+already put on Modrinth (it would upload those again), then use **Actions ->
+Release -> Run workflow** with the same tag.
+
 ## Tuning the amount
 
 `INGOTS_PER_SLOT` is the constant, in each source tree (`Upgrade` in

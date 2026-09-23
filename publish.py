@@ -35,6 +35,9 @@ USER_AGENT = "TinyGecko920/upgradable-gaps publish.py"
 MODRINTH_API = "https://api.modrinth.com/v2"
 CURSEFORGE_API = "https://minecraft.curseforge.com/api"
 HANGAR_API = "https://hangar.papermc.io/api/v1"
+# CurseForge rejects mod files without an environment. Server-side, but singleplayer
+# runs the server inside the client, so it fits both.
+CURSEFORGE_ENVIRONMENTS = ["Client", "Server"]
 
 
 def multipart(fields: dict[str, str], files: dict[str, pathlib.Path]) -> tuple[bytes, str]:
@@ -110,8 +113,8 @@ def curseforge_version_ids(names: list[str]) -> list[int]:
     if _curseforge_versions is None:
         headers = {"X-Api-Token": os.environ["CURSEFORGE_TOKEN"]}
         types = request(f"{CURSEFORGE_API}/game/version-types", headers)
-        # Mod loaders are game versions of their own type on CurseForge.
-        wanted = {t["id"] for t in types if t["slug"].startswith(("minecraft-", "modloader"))}
+        # Loaders and environments are game versions of their own types on CurseForge.
+        wanted = {t["id"] for t in types if t["slug"].startswith(("minecraft-", "modloader", "environment"))}
         versions = request(f"{CURSEFORGE_API}/game/versions", headers)
         _curseforge_versions = {v["name"]: v["id"] for v in versions if v["gameVersionTypeID"] in wanted}
     missing = [n for n in names if n not in _curseforge_versions]
@@ -123,7 +126,7 @@ def curseforge_version_ids(names: list[str]) -> list[int]:
 def curseforge(entry: dict, changelog: str, dry_run: bool) -> None:
     if entry.get("plugin") or not entry["curseforge_loaders"]:
         return
-    names = entry["game_versions"] + entry["curseforge_loaders"]
+    names = entry["game_versions"] + entry["curseforge_loaders"] + CURSEFORGE_ENVIRONMENTS
     metadata = {
         "changelog": changelog,
         "changelogType": "markdown",

@@ -1,0 +1,13 @@
+{
+	"required": true,
+	"minVersion": "0.8",
+	"package": "org.tyfur.upgradablegaps.mixin",
+	"compatibilityLevel": "JAVA_8",
+	"mixins": [
+		"CraftingResultSlotMixin",
+		"CraftingTableMenuMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

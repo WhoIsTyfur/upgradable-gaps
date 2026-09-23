@@ -1,0 +1,23 @@
+/*
+ * Copyright (c) 2026 Tyler Fursman
+ *
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+
+pluginManagement {
+    repositories {
+        maven { url = 'https://maven.fabricmc.net/' }
+        maven { url = 'https://maven.ornithemc.net/releases' }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'upgradable-gaps-ornithe'
+
+// One subproject per Minecraft range; each folder's gradle.properties describes it.
+file('targets').eachDir { dir ->
+    include dir.name
+    project(":${dir.name}").projectDir = dir
+}

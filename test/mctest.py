@@ -44,6 +44,35 @@ ADOPTIUM_RELEASE = (
 FABRIC_META = "https://meta.fabricmc.net/v2"
 FORGE_MAVEN = "https://maven.minecraftforge.net/net/minecraftforge/forge"
 FORGE_PROMOTIONS = "https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json"
+FORGE_LIBRARIES = "https://maven.minecraftforge.net"
+MAVEN_CENTRAL = "https://repo1.maven.org/maven2"
+# Forge's own fmllibs host is gone; Prism Launcher mirrors it (Tyler approved using it on 2026-09-22).
+FMLLIBS = "https://files.prismlauncher.org/fmllibs"
+# What Forge 1.3.2-1.5.2 fetch into lib/ at start, with the SHA-1 FML itself checks.
+FML_LIBRARIES = {
+    "argo-2.25.jar": (f"{MAVEN_CENTRAL}/net/sourceforge/argo/argo/2.25/argo-2.25.jar", "bb672829fde76cb163004752b86b0484bd0a7f4b"),
+    "guava-12.0.1.jar": (f"{MAVEN_CENTRAL}/com/google/guava/guava/12.0.1/guava-12.0.1.jar", "b8e78b9af7bf45900e14c6f958486b6ca682195f"),
+    # FML's own build; Maven Central's asm-all 4.0 has a different hash.
+    "asm-all-4.0.jar": (f"{FMLLIBS}/asm-all-4.0.jar", "98308890597acb64047f7e896638e0d98753ae82"),
+    "bcprov-jdk15on-147.jar": (
+        f"{MAVEN_CENTRAL}/org/bouncycastle/bcprov-jdk15on/1.47/bcprov-jdk15on-1.47.jar",
+        "b6f5d9926b0afbde9f4dbe3db88c5247be7794bb",
+    ),
+    "argo-small-3.2.jar": (f"{FORGE_LIBRARIES}/net/sourceforge/argo/argo/3.2-small/argo-3.2-small.jar", "58912ea2858d168c50781f956fa5b59f0f7c6b51"),
+    "guava-14.0-rc3.jar": (f"{FORGE_LIBRARIES}/com/google/guava/guava/14.0-rc3/guava-14.0-rc3.jar", "931ae21fa8014c3ce686aaa621eae565fefb1a6a"),
+    "asm-all-4.1.jar": (f"{FORGE_LIBRARIES}/org/ow2/asm/asm-all/4.1/asm-all-4.1.jar", "054986e962b88d8660ae4566475658469595ef58"),
+    "bcprov-jdk15on-148.jar": (
+        f"{FORGE_LIBRARIES}/org/bouncycastle/bcprov-jdk15on/148/bcprov-jdk15on-148.jar",
+        "960dea7c9181ba0b17e8bab0c06a43f0a5f04e65",
+    ),
+    "scala-library.jar": (
+        f"{FORGE_LIBRARIES}/org/scala-lang/scala-library/2.10.0-custom/scala-library-2.10.0-custom.jar",
+        "458d046151ad179c85429ed7420ffb1eaf6ddf85",
+    ),
+    "deobfuscation_data_1.5.zip": (f"{FMLLIBS}/deobfuscation_data_1.5.zip", "5f7c142d53776f16304c0bbe10542014abad6af8"),
+    "deobfuscation_data_1.5.1.zip": (f"{FMLLIBS}/deobfuscation_data_1.5.1.zip", "22e221a0d89516c1f721d6cab056a7e37471d0a6"),
+    "deobfuscation_data_1.5.2.zip": (f"{FMLLIBS}/deobfuscation_data_1.5.2.zip", "446e55cd986582c70fcf12cb27bc00114c5adfd9"),
+}
 NEOFORGE_MAVEN = "https://maven.neoforged.net/releases/net/neoforged/neoforge"
 NEOFORGE_VERSIONS = "https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoforge"
 ORNITHE_INSTALLER = (
@@ -358,6 +387,41 @@ def forge(mc: str, version: str) -> Server:
     server = _from_install(_installed("forge", mc, version, url, seed), mc)
     server.java_release = FORGE_JDK.get(mc)
     return server
+
+
+def fml_libraries(mc: str) -> list[str]:
+    parts = tuple(int(p) for p in mc.split("."))
+    if parts >= (1, 5):
+        return ["argo-small-3.2.jar", "guava-14.0-rc3.jar", "asm-all-4.1.jar", "bcprov-jdk15on-148.jar", "scala-library.jar",
+                f"deobfuscation_data_{mc}.zip"]
+    return ["argo-2.25.jar", "guava-12.0.1.jar", "asm-all-4.0.jar"] + (["bcprov-jdk15on-147.jar"] if parts >= (1, 4, 5) else [])
+
+
+def forge_jarmod(mc: str, version: str) -> Server:
+    """Forge before 1.6: its universal zip goes into the vanilla server jar, and FML
+    wants its libraries in lib/ before it starts."""
+    full = forge_maven_version(mc, version)
+    jar = CACHE / "installs" / f"forge-{mc}-{version}" / "server.jar"
+    with lock_for(str(jar)):
+        if not jar.exists():
+            url = f"{FORGE_MAVEN}/{full}/forge-{full}-universal.zip"
+            universal = download(url, CACHE / "installers" / url.rsplit("/", 1)[1])
+            jar.parent.mkdir(parents=True, exist_ok=True)
+            tmp = jar.with_suffix(".part")
+            with zipfile.ZipFile(universal) as forge_zip, zipfile.ZipFile(vanilla_jar(mc)) as vanilla,                     zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as out:
+                patched = set(forge_zip.namelist())
+                # No META-INF from either: signed Forge classes beside unsigned vanilla ones in
+                # one package fail the JVM's signer check.
+                for zf, keep in ((vanilla, lambda n: n not in patched), (forge_zip, lambda n: True)):
+                    for info in zf.infolist():
+                        if keep(info.filename) and not info.filename.startswith("META-INF/"):
+                            out.writestr(info, zf.read(info.filename))
+            tmp.replace(jar)
+    files = {"server.jar": jar}
+    for name in fml_libraries(mc):
+        url, sha1 = FML_LIBRARIES[name]
+        files[f"lib/{name}"] = download(url, CACHE / "fmllibs" / name, sha1=sha1)
+    return Server(java_major(mc), ["-cp", "server.jar", "net.minecraft.server.MinecraftServer", "nogui"], files)
 
 
 def neoforge(mc: str, version: str) -> Server:
@@ -684,9 +748,12 @@ def _bot_session(node: str, scenario: str, port: int, client_version: str, env: 
 
 
 def server_log(workdir: pathlib.Path, process: Process) -> list[str]:
-    """Console output plus debug.log, where Forge before 1.17 lists its mods and mixins."""
-    debug = workdir / "logs" / "debug.log"
-    extra = debug.read_text(encoding="utf-8", errors="replace").splitlines() if debug.exists() else []
+    """Console output plus the logs where Forge lists its mods: debug.log before 1.17,
+    and FML's own log before 1.7."""
+    extra = []
+    for log_file in (workdir / "logs" / "debug.log", workdir / "ForgeModLoader-server-0.log"):
+        if log_file.exists():
+            extra += log_file.read_text(encoding="utf-8", errors="replace").splitlines()
     return process.lines + extra
 
 

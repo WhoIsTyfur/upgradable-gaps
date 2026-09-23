@@ -67,7 +67,10 @@ def server_for(target: dict, mc: str) -> tuple[mctest.Server | None, str]:
         return mctest.quilt(mc, version), version
     if loader == "forge":
         version = mctest.forge_version(mc)
-        return (mctest.forge(mc, version) if version else None), version
+        if version is None:
+            return None, version
+        jarmod = tuple(int(p) for p in mc.split(".")) < (1, 6)
+        return (mctest.forge_jarmod(mc, version) if jarmod else mctest.forge(mc, version)), version
     if loader == "neoforge":
         version = mctest.neoforge_version(mc)
         return (mctest.neoforge(mc, version) if version else None), version

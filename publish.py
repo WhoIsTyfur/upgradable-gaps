@@ -38,6 +38,8 @@ HANGAR_API = "https://hangar.papermc.io/api/v1"
 # CurseForge rejects mod files without an environment. Server-side, but singleplayer
 # runs the server inside the client, so it fits both.
 CURSEFORGE_ENVIRONMENTS = ["Client", "Server"]
+# Hangar's list of Paper versions starts at 1.8.
+HANGAR_OLDEST = "1.8"
 
 
 def multipart(fields: dict[str, str], files: dict[str, pathlib.Path]) -> tuple[bytes, str]:
@@ -108,7 +110,7 @@ def modrinth(entry: dict, changelog: str, dry_run: bool) -> None:
 _curseforge_versions: dict[str, int] | None = None
 
 
-def curseforge_version_ids(names: list[str]) -> list[int]:
+def curseforge_versions() -> dict[str, int]:
     global _curseforge_versions
     if _curseforge_versions is None:
         headers = {"X-Api-Token": os.environ["CURSEFORGE_TOKEN"]}
@@ -117,16 +119,35 @@ def curseforge_version_ids(names: list[str]) -> list[int]:
         wanted = {t["id"] for t in types if t["slug"].startswith(("minecraft-", "modloader", "environment"))}
         versions = request(f"{CURSEFORGE_API}/game/versions", headers)
         _curseforge_versions = {v["name"]: v["id"] for v in versions if v["gameVersionTypeID"] in wanted}
-    missing = [n for n in names if n not in _curseforge_versions]
+    return _curseforge_versions
+
+
+def check_curseforge(manifest: list[dict]) -> None:
+    """Resolve every name before anything uploads. Minecraft versions CurseForge lacks
+    are left off, and a jar with none of its versions there is skipped."""
+    known = curseforge_versions()
+    tags = {n for e in manifest for n in e["curseforge_loaders"]} | set(CURSEFORGE_ENVIRONMENTS)
+    missing = sorted(n for n in tags if n not in known)
     if missing:
         raise RuntimeError(f"CurseForge has no game version for: {', '.join(missing)}")
-    return [_curseforge_versions[n] for n in names]
+    for entry in manifest:
+        if entry.get("plugin") or not entry["curseforge_loaders"]:
+            continue
+        entry["curseforge_game_versions"] = [v for v in entry["game_versions"] if v in known]
+        dropped = [v for v in entry["game_versions"] if v not in known]
+        if dropped:
+            what = "goes up without them" if entry["curseforge_game_versions"] else "is skipped there"
+            print(f"warning: CurseForge lacks {', '.join(dropped)}; {entry['file']} {what}")
 
 
 def curseforge(entry: dict, changelog: str, dry_run: bool) -> None:
     if entry.get("plugin") or not entry["curseforge_loaders"]:
         return
-    names = entry["game_versions"] + entry["curseforge_loaders"] + CURSEFORGE_ENVIRONMENTS
+    versions = entry.get("curseforge_game_versions", entry["game_versions"])
+    if not versions:
+        print("  curseforge: skipped, it has none of these Minecraft versions")
+        return
+    names = versions + entry["curseforge_loaders"] + CURSEFORGE_ENVIRONMENTS
     metadata = {
         "changelog": changelog,
         "changelogType": "markdown",
@@ -136,7 +157,7 @@ def curseforge(entry: dict, changelog: str, dry_run: bool) -> None:
     if dry_run:
         print("  curseforge:", json.dumps({**metadata, "gameVersions": names}))
         return
-    metadata["gameVersions"] = curseforge_version_ids(names)
+    metadata["gameVersions"] = [curseforge_versions()[n] for n in names]
     body, content_type = multipart({"metadata": json.dumps(metadata)}, {"file": DIST / entry["file"]})
     project = os.environ["CURSEFORGE_PROJECT_ID"]
     result = request(
@@ -148,35 +169,40 @@ def curseforge(entry: dict, changelog: str, dry_run: bool) -> None:
 _hangar_jwt: str | None = None
 
 
-def hangar(entry: dict, changelog: str, dry_run: bool) -> None:
+def hangar_jwt() -> str:
     global _hangar_jwt
+    if _hangar_jwt is None:
+        query = urllib.parse.urlencode({"apiKey": os.environ["HANGAR_API_KEY"]})
+        _hangar_jwt = request(f"{HANGAR_API}/authenticate?{query}", {}, method="POST")["token"]
+    return _hangar_jwt
+
+
+def hangar(entry: dict, changelog: str, dry_run: bool) -> None:
     if not entry.get("plugin"):
         return
-    versions = entry["game_versions"]
     upload = {
         "version": entry["version_number"],
         "channel": "Release",
         "description": changelog,
-        "platformDependencies": {"PAPER": [f"{versions[0]}-{versions[-1]}"]},
+        "platformDependencies": {"PAPER": [f"{HANGAR_OLDEST}-{entry['game_versions'][-1]}"]},
         "pluginDependencies": {},
         "files": [{"platforms": ["PAPER"]}],
     }
     if dry_run:
         print("  hangar:", json.dumps(upload))
         return
-    if _hangar_jwt is None:
-        query = urllib.parse.urlencode({"apiKey": os.environ["HANGAR_API_KEY"]})
-        _hangar_jwt = request(f"{HANGAR_API}/authenticate?{query}", {}, method="POST")["token"]
     body, content_type = multipart({"versionUpload": json.dumps(upload)}, {"files": DIST / entry["file"]})
     project = urllib.parse.quote(os.environ["HANGAR_PROJECT"])
-    result = request(f"{HANGAR_API}/projects/{project}/upload", {"Authorization": f"HangarAuth {_hangar_jwt}"}, body, content_type)
+    result = request(f"{HANGAR_API}/projects/{project}/upload", {"Authorization": f"HangarAuth {hangar_jwt()}"}, body, content_type)
     print("  hangar:", result.get("url", result))
 
 
+# Strictest first: a rejection should stop the run before Modrinth, which takes
+# anything, holds a copy someone has to delete by hand.
 PLATFORMS = {
-    modrinth: ("MODRINTH_TOKEN", "MODRINTH_PROJECT_ID"),
-    curseforge: ("CURSEFORGE_TOKEN", "CURSEFORGE_PROJECT_ID"),
     hangar: ("HANGAR_API_KEY", "HANGAR_PROJECT"),
+    curseforge: ("CURSEFORGE_TOKEN", "CURSEFORGE_PROJECT_ID"),
+    modrinth: ("MODRINTH_TOKEN", "MODRINTH_PROJECT_ID"),
 }
 
 
@@ -190,6 +216,14 @@ def main() -> int:
     if not uploads:
         print("no platform credentials set; nothing to do", file=sys.stderr)
         return 1
+
+    # The plugin first too, so Hangar (its only extra platform) is tried early.
+    manifest.sort(key=lambda e: not e.get("plugin"))
+    if not args.dry_run:
+        if curseforge in uploads:
+            check_curseforge(manifest)
+        if hangar in uploads:
+            hangar_jwt()
 
     for entry in manifest:
         mod_version = entry["version_number"].split("+", 1)[0]

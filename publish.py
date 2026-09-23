@@ -31,7 +31,7 @@ import uuid
 
 ROOT = pathlib.Path(__file__).resolve().parent
 DIST = ROOT / "dist"
-USER_AGENT = "TinyGecko920/upgradable-gaps publish.py"
+USER_AGENT = "WhoIsTyfur/upgradable-gaps publish.py"
 MODRINTH_API = "https://api.modrinth.com/v2"
 CURSEFORGE_API = "https://minecraft.curseforge.com/api"
 HANGAR_API = "https://hangar.papermc.io/api/v1"

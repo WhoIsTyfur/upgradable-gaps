@@ -169,7 +169,9 @@ secrets and variables; a platform without them is skipped:
 | CurseForge | `CURSEFORGE_TOKEN` | `CURSEFORGE_PROJECT_ID` | mod jars except Ornithe |
 | Hangar | `HANGAR_API_KEY` | `HANGAR_PROJECT` | the plugin |
 
-SpigotMC has no upload API, so post the plugin there by hand.
+Two plugin pages take the `+bukkit` jar from the GitHub release by hand:
+SpigotMC, which has no upload API, and the CurseForge Bukkit Plugins project,
+whose API (on dev.bukkit.org) only takes a legacy Twitch login.
 `python publish.py --dry-run` prints every upload without sending anything.
 
 ## Tuning the amount

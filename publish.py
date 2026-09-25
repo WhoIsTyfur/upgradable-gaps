@@ -42,6 +42,11 @@ CURSEFORGE_ENVIRONMENTS = ["Client", "Server"]
 HANGAR_OLDEST = "1.8"
 
 
+def env(name: str, default: str = "") -> str:
+    # A secret pasted with a trailing newline keeps it, and Hangar rejects such a key.
+    return os.environ.get(name, default).strip()
+
+
 def multipart(fields: dict[str, str], files: dict[str, pathlib.Path]) -> tuple[bytes, str]:
     boundary = uuid.uuid4().hex
     parts: list[bytes] = []
@@ -87,7 +92,7 @@ def display_name(entry: dict) -> str:
 
 def modrinth(entry: dict, changelog: str, dry_run: bool) -> None:
     data = {
-        "project_id": os.environ.get("MODRINTH_PROJECT_ID", "<MODRINTH_PROJECT_ID>"),
+        "project_id": env("MODRINTH_PROJECT_ID", "<MODRINTH_PROJECT_ID>"),
         "name": display_name(entry),
         "version_number": entry["version_number"],
         "changelog": changelog,
@@ -103,7 +108,7 @@ def modrinth(entry: dict, changelog: str, dry_run: bool) -> None:
         print("  modrinth:", json.dumps(data))
         return
     body, content_type = multipart({"data": json.dumps(data)}, {"file": DIST / entry["file"]})
-    result = request(f"{MODRINTH_API}/version", {"Authorization": os.environ["MODRINTH_TOKEN"]}, body, content_type)
+    result = request(f"{MODRINTH_API}/version", {"Authorization": env("MODRINTH_TOKEN")}, body, content_type)
     print("  modrinth: version", result["id"])
 
 
@@ -113,7 +118,7 @@ _curseforge_versions: dict[str, int] | None = None
 def curseforge_versions() -> dict[str, int]:
     global _curseforge_versions
     if _curseforge_versions is None:
-        headers = {"X-Api-Token": os.environ["CURSEFORGE_TOKEN"]}
+        headers = {"X-Api-Token": env("CURSEFORGE_TOKEN")}
         types = request(f"{CURSEFORGE_API}/game/version-types", headers)
         # Loaders and environments are game versions of their own types on CurseForge.
         wanted = {t["id"] for t in types if t["slug"].startswith(("minecraft-", "modloader", "environment"))}
@@ -159,9 +164,9 @@ def curseforge(entry: dict, changelog: str, dry_run: bool) -> None:
         return
     metadata["gameVersions"] = [curseforge_versions()[n] for n in names]
     body, content_type = multipart({"metadata": json.dumps(metadata)}, {"file": DIST / entry["file"]})
-    project = os.environ["CURSEFORGE_PROJECT_ID"]
+    project = env("CURSEFORGE_PROJECT_ID")
     result = request(
-        f"{CURSEFORGE_API}/projects/{project}/upload-file", {"X-Api-Token": os.environ["CURSEFORGE_TOKEN"]}, body, content_type
+        f"{CURSEFORGE_API}/projects/{project}/upload-file", {"X-Api-Token": env("CURSEFORGE_TOKEN")}, body, content_type
     )
     print("  curseforge: file", result["id"])
 
@@ -172,7 +177,7 @@ _hangar_jwt: str | None = None
 def hangar_jwt() -> str:
     global _hangar_jwt
     if _hangar_jwt is None:
-        query = urllib.parse.urlencode({"apiKey": os.environ["HANGAR_API_KEY"]})
+        query = urllib.parse.urlencode({"apiKey": env("HANGAR_API_KEY")})
         _hangar_jwt = request(f"{HANGAR_API}/authenticate?{query}", {}, method="POST")["token"]
     return _hangar_jwt
 
@@ -192,7 +197,7 @@ def hangar(entry: dict, changelog: str, dry_run: bool) -> None:
         print("  hangar:", json.dumps(upload))
         return
     body, content_type = multipart({"versionUpload": json.dumps(upload)}, {"files": DIST / entry["file"]})
-    project = urllib.parse.quote(os.environ["HANGAR_PROJECT"])
+    project = urllib.parse.quote(env("HANGAR_PROJECT"))
     result = request(f"{HANGAR_API}/projects/{project}/upload", {"Authorization": f"HangarAuth {hangar_jwt()}"}, body, content_type)
     print("  hangar:", result.get("url", result))
 
@@ -212,7 +217,7 @@ def main() -> int:
     args = parser.parse_args()
 
     manifest = json.loads((DIST / "manifest.json").read_text(encoding="utf-8"))
-    uploads = [p for p, needs in PLATFORMS.items() if args.dry_run or all(os.environ.get(v) for v in needs)]
+    uploads = [p for p, needs in PLATFORMS.items() if args.dry_run or all(env(v) for v in needs)]
     if not uploads:
         print("no platform credentials set; nothing to do", file=sys.stderr)
         return 1

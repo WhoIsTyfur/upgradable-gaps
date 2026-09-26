@@ -177,8 +177,14 @@ _hangar_jwt: str | None = None
 def hangar_jwt() -> str:
     global _hangar_jwt
     if _hangar_jwt is None:
-        query = urllib.parse.urlencode({"apiKey": env("HANGAR_API_KEY")})
-        _hangar_jwt = request(f"{HANGAR_API}/authenticate?{query}", {}, method="POST")["token"]
+        key = env("HANGAR_API_KEY")
+        query = urllib.parse.urlencode({"apiKey": key})
+        try:
+            _hangar_jwt = request(f"{HANGAR_API}/authenticate?{query}", {}, method="POST")["token"]
+        except RuntimeError as err:
+            # Describe the saved key's shape without printing the secret itself.
+            shape = f"{len(key)} characters in {len(key.split('.'))} dot-separated part(s)"
+            raise RuntimeError(f"{err}\nHANGAR_API_KEY is {shape}; a Hangar key is two long codes joined by one dot") from None
     return _hangar_jwt
 
 

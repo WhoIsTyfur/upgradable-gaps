@@ -22,7 +22,15 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Check the tag matches mod_version
-        run: test "${TAG#v}" = "$(python3 -c 'import build; print(build.mod_version())')"
+        run: |
+          # Forgive a typed tag's spaces, capital V or missing v.
+          version="$(python3 -c 'import build; print(build.mod_version())')"
+          typed="$(printf '%s' "$TAG" | tr -d '[:space:]')"
+          if [ "${typed#[vV]}" != "$version" ]; then
+            echo "::error::Tag '$TAG' does not match mod_version $version; use v$version"
+            exit 1
+          fi
+          echo "RELEASE_TAG=v$version" >> "$GITHUB_ENV"
 
       - name: Build
         run: python3 build.py
@@ -41,5 +49,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes="$(python3 -c "import publish; print(publish.changelog_for('${TAG#v}'))")"
-          gh release create "$TAG" dist/*.jar --title "Upgradable Gaps ${TAG#v}" --notes "$notes"
+          notes="$(python3 -c "import publish; print(publish.changelog_for('${RELEASE_TAG#v}'))")"
+          gh release create "$RELEASE_TAG" dist/*.jar --title "Upgradable Gaps ${RELEASE_TAG#v}" --notes "$notes"
